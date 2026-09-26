@@ -14,14 +14,14 @@ const STORAGE_KEY = "saved-sessions";
 const tabs = [
   { id: "flashcards", label: "Flashcards" },
   { id: "notes", label: "Study Notes" },
-  { id: "examples", label: "Examples" },
+  { id: "chart", label: "Chart" },
   { id: "quiz", label: "Quiz" },
 ];
 
 const sectionTypes = {
   flashcards: ["flashcard"],
   notes: ["concept", "note"],
-  examples: ["example"],
+  chart: ["chart"],
   quiz: ["quiz"],
 };
 

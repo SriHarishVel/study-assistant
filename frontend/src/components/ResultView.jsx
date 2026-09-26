@@ -3,6 +3,7 @@ import remarkGfm from "remark-gfm";
 
 import FlashcardDeck from "./FlashcardDeck";
 import QuizSection from "./QuizSection";
+import ChartSection from "./ChartSection";
 
 function ResultView({ response, activeTab }) {
   if (!response || !Array.isArray(response.blocks)) {
@@ -11,17 +12,16 @@ function ResultView({ response, activeTab }) {
 
   const concepts = response.blocks.filter((block) => block.type === "concept");
 
-  const examples = response.blocks.filter((block) => block.type === "example");
-
   const flashcards = response.blocks.filter(
     (block) => block.type === "flashcard",
   );
 
   const quizzes = response.blocks.filter((block) => block.type === "quiz");
 
+  const charts = response.blocks.filter((block) => block.type === "chart");
+
   return (
     <div className="result-view">
-
       {activeTab === "flashcards" && (
         <section className="panel study-material">
           <h3>Flashcards</h3>
@@ -74,22 +74,16 @@ function ResultView({ response, activeTab }) {
         </>
       )}
 
-      {activeTab === "examples" && (
+      {activeTab === "chart" && (
         <section className="panel study-material">
-          <h3>Examples</h3>
+          <h3>Charts</h3>
 
-          {examples.length > 0 ? (
-            examples.map((block, index) => (
-              <div key={index} className="example-card">
-                <h4>{block.title}</h4>
-
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {block.content}
-                </ReactMarkdown>
-              </div>
+          {charts.length > 0 ? (
+            charts.map((block, index) => (
+              <ChartSection key={block.id || index} block={block} />
             ))
           ) : (
-            <p className="muted">No examples available.</p>
+            <p className="muted">No charts available for this topic.</p>
           )}
         </section>
       )}

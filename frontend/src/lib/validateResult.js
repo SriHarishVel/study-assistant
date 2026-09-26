@@ -5,7 +5,7 @@ const validTypes = Object.values(blockTypes);
 const sectionTypes = {
   flashcards: blockTypes.FLASHCARD,
   notes: blockTypes.CONCEPT,
-  examples: blockTypes.EXAMPLE,
+  chart: blockTypes.CHART,
   quiz: blockTypes.QUIZ,
 };
 
@@ -30,12 +30,62 @@ function validateBlock(block) {
     );
   }
 
-  if (block.type === blockTypes.EXAMPLE) {
+  if (block.type === blockTypes.CHART) {
+    if (
+      typeof block.title !== "string" ||
+      !block.title.trim() ||
+      typeof block.description !== "string" ||
+      !block.description.trim()
+    ) {
+      return false;
+    }
+
+    if (block.chartType === "flowchart") {
+      if (
+        !Array.isArray(block.nodes) ||
+        block.nodes.length < 2 ||
+        !block.nodes.every(
+          (node) =>
+            node &&
+            typeof node.id === "string" &&
+            !!node.id.trim() &&
+            typeof node.label === "string" &&
+            !!node.label.trim(),
+        ) ||
+        new Set(block.nodes.map((node) => node.id)).size !==
+          block.nodes.length ||
+        !Array.isArray(block.connections) ||
+        block.connections.length < 1
+      ) {
+        return false;
+      }
+
+      const nodeIds = new Set(block.nodes.map((node) => node.id));
+
+      return block.connections.every(
+        (connection) =>
+          connection &&
+          typeof connection.from === "string" &&
+          typeof connection.to === "string" &&
+          nodeIds.has(connection.from) &&
+          nodeIds.has(connection.to) &&
+          (connection.label === undefined ||
+            typeof connection.label === "string"),
+      );
+    }
+
     return (
-      typeof block.title === "string" &&
-      !!block.title.trim() &&
-      typeof block.content === "string" &&
-      !!block.content.trim()
+      ["bar", "line", "pie"].includes(block.chartType) &&
+      Array.isArray(block.data) &&
+      block.data.length >= 2 &&
+      block.data.every(
+        (item) =>
+          item &&
+          typeof item.label === "string" &&
+          !!item.label.trim() &&
+          typeof item.value === "number" &&
+          Number.isFinite(item.value),
+      )
     );
   }
 
@@ -80,7 +130,11 @@ export function validateResult(data) {
     return false;
   }
 
-  if (!Array.isArray(data.blocks) || data.blocks.length === 0) {
+  if (
+    !Array.isArray(data.blocks) ||
+    data.blocks.length < 14 ||
+    data.blocks.length > 16
+  ) {
     return false;
   }
 
@@ -94,7 +148,12 @@ export function validateResult(data) {
     typeCounts[block.type]++;
   }
 
-  return validTypes.every((type) => typeCounts[type] > 0);
+  return (
+    typeCounts[blockTypes.FLASHCARD] === 5 &&
+    typeCounts[blockTypes.CONCEPT] === 4 &&
+    typeCounts[blockTypes.CHART] <= 2 &&
+    typeCounts[blockTypes.QUIZ] === 5
+  );
 }
 
 export function validateRefinedSection(data, section) {
@@ -102,8 +161,7 @@ export function validateRefinedSection(data, section) {
     !data ||
     typeof data !== "object" ||
     Array.isArray(data) ||
-    !Array.isArray(data.blocks) ||
-    data.blocks.length === 0
+    !Array.isArray(data.blocks)
   ) {
     return false;
   }
@@ -111,6 +169,14 @@ export function validateRefinedSection(data, section) {
   const allowedType = sectionTypes[section];
 
   if (!allowedType) {
+    return false;
+  }
+
+  if (section === "chart") {
+    if (data.blocks.length > 2) {
+      return false;
+    }
+  } else if (data.blocks.length === 0) {
     return false;
   }
 

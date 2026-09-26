@@ -4,14 +4,19 @@ function QuizCard({ block, onAnswer, questionIndex }) {
   const [selectedAnswer, setSelectedAnswer] = useState(null);
   const [submitted, setSubmitted] = useState(false);
 
-  const options = Array.isArray(block.options) ? block.options : [];
-  const isCorrect = selectedAnswer === block.answer;
+  const options = Array.isArray(block?.options) ? block.options : [];
+
+  const isCorrect = selectedAnswer === block?.answer;
 
   function handleSubmit() {
     if (selectedAnswer === null || submitted) return;
 
     setSubmitted(true);
     onAnswer(questionIndex, isCorrect);
+  }
+
+  if (!block || !block.question || options.length === 0) {
+    return null;
   }
 
   return (
