@@ -7,7 +7,7 @@ function FlashcardDeck({ blocks = [] }) {
   const [showAnswer, setShowAnswer] = useState(false);
 
   if (cards.length === 0) {
-    return <p>No flashcards available.</p>;
+    return <p className="muted">No flashcards available.</p>;
   }
 
   const currentCard = cards[currentIndex];
@@ -53,7 +53,8 @@ function FlashcardDeck({ blocks = [] }) {
         </p>
 
         <button
-          className="flashcard-nav"
+          type="button"
+          className="secondary"
           onClick={() => setShowAnswer((previous) => !previous)}
         >
           {showAnswer ? "Show Question" : "Reveal Answer"}
@@ -62,7 +63,8 @@ function FlashcardDeck({ blocks = [] }) {
 
       <div className="flashcard-controls">
         <button
-          className="flashcard-nav"
+          type="button"
+          className="secondary"
           onClick={previousCard}
           disabled={currentIndex === 0}
         >
@@ -70,7 +72,8 @@ function FlashcardDeck({ blocks = [] }) {
         </button>
 
         <button
-          className="flashcard-nav"
+          type="button"
+          className="secondary"
           onClick={nextCard}
           disabled={currentIndex === cards.length - 1}
         >

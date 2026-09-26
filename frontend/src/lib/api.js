@@ -1,6 +1,6 @@
-import { validateResult } from "./validateResult";
+import { validateResult, validateRefinedSection } from "./validateResult";
 
-export async function generateStudyMaterial(input) {
+async function postStudyMaterial(endpoint, body, validator = validateResult) {
   const controller = new AbortController();
 
   const timeoutId = setTimeout(() => {
@@ -8,12 +8,12 @@ export async function generateStudyMaterial(input) {
   }, 90000);
 
   try {
-    const response = await fetch("http://localhost:5000/api/generate", {
+    const response = await fetch(`http://localhost:5000/api/${endpoint}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ input }),
+      body: JSON.stringify(body),
       signal: controller.signal,
     });
 
@@ -21,7 +21,7 @@ export async function generateStudyMaterial(input) {
 
     if (!response.ok) {
       const error = new Error(
-        data?.error || "Failed to generate study material.",
+        data?.error || "Failed to process study material.",
       );
 
       error.status = response.status;
@@ -30,9 +30,11 @@ export async function generateStudyMaterial(input) {
       throw error;
     }
 
-    if (!validateResult(data)) {
+    if (!validator(data)) {
       const error = new Error(
-        "The AI returned invalid study material. Please try again.",
+        endpoint === "refine"
+          ? "The AI returned invalid section content. Please try again."
+          : "The AI returned invalid study material. Please try again.",
       );
 
       error.status = 502;
@@ -65,4 +67,20 @@ export async function generateStudyMaterial(input) {
   } finally {
     clearTimeout(timeoutId);
   }
+}
+
+export function generateStudyMaterial(input) {
+  return postStudyMaterial("generate", { input });
+}
+
+export function refineStudyMaterial(sectionContent, instruction, section) {
+  return postStudyMaterial(
+    "refine",
+    {
+      section,
+      content: sectionContent,
+      instruction,
+    },
+    (data) => validateRefinedSection(data, section),
+  );
 }

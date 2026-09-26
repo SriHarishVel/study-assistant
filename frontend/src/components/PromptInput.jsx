@@ -1,13 +1,13 @@
 function PromptInput({ input, setInput, onSubmit }) {
   return (
     <form
-      className="prompt-form"
+      className="panel prompt-form"
       onSubmit={(event) => {
         event.preventDefault();
         onSubmit();
       }}
     >
-      <label className="prompt-label" htmlFor="study-topic">
+      <label className="label" htmlFor="study-topic">
         What do you want to study?
       </label>
 
@@ -15,17 +15,18 @@ function PromptInput({ input, setInput, onSubmit }) {
         <input
           id="study-topic"
           type="text"
+          className="input"
           value={input}
           onChange={(event) => setInput(event.target.value)}
           placeholder="Enter a topic to start learning..."
         />
 
-        <button type="submit" disabled={!input.trim()}>
-          Generate <span>→</span>
+        <button type="submit" className="primary" disabled={!input.trim()}>
+          Generate
         </button>
       </div>
 
-      <p className="prompt-hint">
+      <p className="muted prompt-hint">
         Flashcards, notes, examples and quizzes in one place.
       </p>
     </form>

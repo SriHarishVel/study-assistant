@@ -1,13 +1,29 @@
 import { useState, useRef, useEffect } from "react";
 
-import { generateStudyMaterial } from "./lib/api";
+import { generateStudyMaterial, refineStudyMaterial } from "./lib/api";
+
 import PromptInput from "./components/PromptInput";
 import ResultView from "./components/ResultView";
 import LoadingState from "./components/LoadingState";
 import ErrorState from "./components/ErrorState";
 import SavedSessions from "./components/SavedSessions";
+import RefinementInput from "./components/RefinementInput";
 
-const STORAGE_KEY = "flam-saved-sessions";
+const STORAGE_KEY = "saved-sessions";
+
+const tabs = [
+  { id: "flashcards", label: "Flashcards" },
+  { id: "notes", label: "Study Notes" },
+  { id: "examples", label: "Examples" },
+  { id: "quiz", label: "Quiz" },
+];
+
+const sectionTypes = {
+  flashcards: ["flashcard"],
+  notes: ["concept", "note"],
+  examples: ["example"],
+  quiz: ["quiz"],
+};
 
 function getSavedSessions() {
   try {
@@ -20,13 +36,51 @@ function getSavedSessions() {
   }
 }
 
+function getSectionContent(material, tab) {
+  const types = sectionTypes[tab] || [];
+
+  return material.blocks.filter((block) => types.includes(block.type));
+}
+
+function mergeRefinedSection(material, refinedBlocks, tab) {
+  const types = sectionTypes[tab] || [];
+
+  const originalBlocks = material.blocks;
+
+  const firstIndex = originalBlocks.findIndex((block) =>
+    types.includes(block.type),
+  );
+
+  const updatedBlocks = originalBlocks.filter(
+    (block) => !types.includes(block.type),
+  );
+
+  const insertIndex =
+    firstIndex < 0
+      ? updatedBlocks.length
+      : originalBlocks
+          .slice(0, firstIndex)
+          .filter((block) => !types.includes(block.type)).length;
+
+  updatedBlocks.splice(insertIndex, 0, ...refinedBlocks);
+
+  return {
+    ...material,
+    blocks: updatedBlocks,
+  };
+}
+
 function App() {
   const [input, setInput] = useState("");
   const [response, setResponse] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  const [refining, setRefining] = useState(false);
+  const [refinementError, setRefinementError] = useState(null);
+
   const [activeTab, setActiveTab] = useState("flashcards");
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(true);
   const [sessions, setSessions] = useState(getSavedSessions);
 
   const requestId = useRef(0);
@@ -46,20 +100,15 @@ function App() {
     }
   }, [sessions]);
 
-  const tabs = [
-    { id: "flashcards", label: "Flashcards" },
-    { id: "notes", label: "Study Notes" },
-    { id: "examples", label: "Examples" },
-    { id: "quiz", label: "Quiz" },
-  ];
-
   async function handleSubmit() {
-    if (!input.trim()) return;
+    if (!input.trim() || loading || refining) return;
 
     const id = ++requestId.current;
 
     setLoading(true);
+    setRefining(false);
     setError(null);
+    setRefinementError(null);
     setResponse(null);
     setActiveTab("flashcards");
 
@@ -80,8 +129,70 @@ function App() {
     }
   }
 
+  async function handleRefine(instruction) {
+    if (!response || !instruction.trim() || refining || loading) return;
+
+    const id = ++requestId.current;
+    const selectedTab = activeTab;
+
+    const sectionContent = getSectionContent(response, selectedTab);
+
+    if (sectionContent.length === 0) {
+      setRefinementError("No content found in this section to refine.");
+      return;
+    }
+
+    setRefining(true);
+    setRefinementError(null);
+    setError(null);
+
+    try {
+      const refinedSection = await refineStudyMaterial(
+        sectionContent,
+        instruction.trim(),
+        selectedTab,
+      );
+
+      if (id !== requestId.current) return;
+
+      if (!refinedSection || !Array.isArray(refinedSection.blocks)) {
+        throw new Error(
+          "The AI returned an invalid section. Please try again.",
+        );
+      }
+
+      const allowedTypes = sectionTypes[selectedTab] || [];
+
+      const validBlocks = refinedSection.blocks.every((block) =>
+        allowedTypes.includes(block.type),
+      );
+
+      if (refinedSection.blocks.length === 0 || !validBlocks) {
+        throw new Error("The AI returned invalid content for this tab.");
+      }
+
+      setResponse((prev) => {
+        if (!prev) return prev;
+
+        return mergeRefinedSection(prev, refinedSection.blocks, selectedTab);
+      });
+
+      setActiveTab(selectedTab);
+    } catch (err) {
+      if (id !== requestId.current) return;
+
+      setRefinementError(
+        err.message || "Unable to refine this section. Please try again.",
+      );
+    } finally {
+      if (id === requestId.current) {
+        setRefining(false);
+      }
+    }
+  }
+
   function handleSaveSession() {
-    if (!response) return;
+    if (!response || loading) return;
 
     const session = {
       id: crypto.randomUUID(),
@@ -97,11 +208,16 @@ function App() {
     requestId.current += 1;
 
     setLoading(false);
+    setRefining(false);
     setError(null);
+    setRefinementError(null);
     setResponse(session.response);
     setActiveTab("flashcards");
 
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
   }
 
   function handleDeleteSession(id) {
@@ -115,9 +231,8 @@ function App() {
 
         <button
           type="button"
-          className="theme-toggle"
+          className="secondary theme-toggle"
           onClick={() => setDarkMode((prev) => !prev)}
-          aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
         >
           {darkMode ? "☀️ Light Mode" : "🌙 Dark Mode"}
         </button>
@@ -125,37 +240,33 @@ function App() {
 
       <PromptInput input={input} setInput={setInput} onSubmit={handleSubmit} />
 
-      {response && !loading && (
-        <button
-          type="button"
-          className="save-session-button"
-          onClick={handleSaveSession}
-        >
-          Save Session
-        </button>
-      )}
-
       <SavedSessions
         sessions={sessions}
         onLoad={handleLoadSession}
         onDelete={handleDeleteSession}
+        onSave={handleSaveSession}
+        canSave={Boolean(response && !loading)}
       />
 
       {response && (
-        <div className="study-tabs">
+        <nav className="study-tabs" aria-label="Study material sections">
           {tabs.map((tab) => (
             <button
+              type="button"
               key={tab.id}
               className={
                 activeTab === tab.id ? "study-tab active" : "study-tab"
               }
-              onClick={() => setActiveTab(tab.id)}
-              disabled={loading}
+              onClick={() => {
+                setActiveTab(tab.id);
+                setRefinementError(null);
+              }}
+              disabled={loading || refining}
             >
               {tab.label}
             </button>
           ))}
-        </div>
+        </nav>
       )}
 
       {loading && <LoadingState />}
@@ -163,7 +274,21 @@ function App() {
       {error && <ErrorState message={error} onRetry={handleSubmit} />}
 
       {!loading && !error && response && (
-        <ResultView response={response} activeTab={activeTab} />
+        <div className="study-workspace">
+          <main className="study-main">
+            <ResultView response={response} activeTab={activeTab} />
+          </main>
+
+          <aside className="study-sidebar">
+            <div className="refinement-sticky">
+              <RefinementInput
+                onRefine={handleRefine}
+                loading={refining}
+                error={refinementError}
+              />
+            </div>
+          </aside>
+        </div>
       )}
     </div>
   );

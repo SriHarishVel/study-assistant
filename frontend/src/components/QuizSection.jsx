@@ -33,7 +33,7 @@ function QuizSection({ quizzes }) {
   }
 
   return (
-    <section className="study-material">
+    <section className="panel study-material">
       <h3>Practice Quiz</h3>
 
       {quizzes.length > 0 ? (
@@ -49,7 +49,7 @@ function QuizSection({ quizzes }) {
           </div>
 
           {quizCompleted && (
-            <div className="quiz-feedback success" role="status">
+            <div className="notice success" role="status">
               <h3>Quiz completed!</h3>
 
               <p>
@@ -62,7 +62,7 @@ function QuizSection({ quizzes }) {
 
               <button
                 type="button"
-                className="quiz-action"
+                className="secondary"
                 onClick={handleRetake}
               >
                 Retake quiz
@@ -80,7 +80,7 @@ function QuizSection({ quizzes }) {
           ))}
         </>
       ) : (
-        <p>No quiz questions available.</p>
+        <p className="muted">No quiz questions available.</p>
       )}
     </section>
   );

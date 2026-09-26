@@ -15,10 +15,10 @@ function QuizCard({ block, onAnswer, questionIndex }) {
   }
 
   return (
-    <section className="quiz-card">
+    <section className="panel quiz-card">
       <div className="quiz-header">
-        <span className="quiz-label">QUICK QUIZ</span>
-        <span className="quiz-count">{options.length} options</span>
+        <span className="badge">QUICK QUIZ</span>
+        <span className="muted">{options.length} options</span>
       </div>
 
       <h3 className="quiz-question">{block.question}</h3>
@@ -46,9 +46,7 @@ function QuizCard({ block, onAnswer, questionIndex }) {
               }}
               disabled={submitted}
             >
-              <span className="quiz-option-letter">
-                { index+1 }
-              </span>
+              <span className="quiz-option-letter">{index + 1}</span>
 
               <span className="quiz-option-text">{option}</span>
 
@@ -64,7 +62,7 @@ function QuizCard({ block, onAnswer, questionIndex }) {
 
       {submitted && (
         <div
-          className={`quiz-feedback ${isCorrect ? "success" : "error"}`}
+          className={`notice ${isCorrect ? "success" : "error"}`}
           role="status"
         >
           <strong>{isCorrect ? "Correct!" : "Not quite."}</strong>
@@ -81,7 +79,7 @@ function QuizCard({ block, onAnswer, questionIndex }) {
         {!submitted && (
           <button
             type="button"
-            className="quiz-action"
+            className="primary"
             onClick={handleSubmit}
             disabled={selectedAnswer === null}
           >

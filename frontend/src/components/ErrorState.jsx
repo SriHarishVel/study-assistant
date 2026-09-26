@@ -1,12 +1,13 @@
 function ErrorState({ message, onRetry }) {
   return (
-    <div className="error-state" role="alert">
+    <section className="panel notice error" role="alert">
       <h3>Something went wrong</h3>
       <p>{message}</p>
-      <button type="button" onClick={onRetry}>
+
+      <button type="button" className="secondary" onClick={onRetry}>
         Try again
       </button>
-    </div>
+    </section>
   );
 }
 

@@ -13,6 +13,77 @@ const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
 });
 
+const blockTypes = {
+  CONCEPT: "concept",
+  EXAMPLE: "example",
+  FLASHCARD: "flashcard",
+  QUIZ: "quiz",
+};
+
+const sectionTypes = {
+  flashcards: blockTypes.FLASHCARD,
+  notes: blockTypes.CONCEPT,
+  examples: blockTypes.EXAMPLE,
+  quiz: blockTypes.QUIZ,
+};
+
+function validateBlock(block) {
+  if (
+    !block ||
+    typeof block !== "object" ||
+    Array.isArray(block) ||
+    !Object.values(blockTypes).includes(block.type)
+  ) {
+    return false;
+  }
+
+  if (block.type === blockTypes.CONCEPT) {
+    return (
+      typeof block.term === "string" &&
+      !!block.term.trim() &&
+      typeof block.definition === "string" &&
+      !!block.definition.trim() &&
+      typeof block.keyPoint === "string" &&
+      !!block.keyPoint.trim()
+    );
+  }
+
+  if (block.type === blockTypes.EXAMPLE) {
+    return (
+      typeof block.title === "string" &&
+      !!block.title.trim() &&
+      typeof block.content === "string" &&
+      !!block.content.trim()
+    );
+  }
+
+  if (block.type === blockTypes.FLASHCARD) {
+    return (
+      typeof block.question === "string" &&
+      !!block.question.trim() &&
+      typeof block.answer === "string" &&
+      !!block.answer.trim()
+    );
+  }
+
+  if (block.type === blockTypes.QUIZ) {
+    return (
+      typeof block.question === "string" &&
+      !!block.question.trim() &&
+      Array.isArray(block.options) &&
+      block.options.length === 4 &&
+      block.options.every(
+        (option) => typeof option === "string" && !!option.trim(),
+      ) &&
+      Number.isInteger(block.answer) &&
+      block.answer >= 0 &&
+      block.answer < block.options.length
+    );
+  }
+
+  return false;
+}
+
 function validateStudyMaterial(data) {
   if (
     !data ||
@@ -21,70 +92,136 @@ function validateStudyMaterial(data) {
     typeof data.title !== "string" ||
     !data.title.trim() ||
     typeof data.summary !== "string" ||
-    !Array.isArray(data.blocks)
+    !data.summary.trim() ||
+    !Array.isArray(data.blocks) ||
+    data.blocks.length !== 16
   ) {
     return false;
   }
 
-  const flashcards = data.blocks.filter((block) => block?.type === "flashcard");
+  const typeCounts = Object.fromEntries(
+    Object.values(blockTypes).map((type) => [type, 0]),
+  );
 
-  const concepts = data.blocks.filter((block) => block?.type === "concept");
+  for (const block of data.blocks) {
+    if (!validateBlock(block)) {
+      return false;
+    }
 
-  const examples = data.blocks.filter((block) => block?.type === "example");
+    typeCounts[block.type]++;
+  }
 
-  const quizzes = data.blocks.filter((block) => block?.type === "quiz");
+  return (
+    typeCounts[blockTypes.FLASHCARD] === 5 &&
+    typeCounts[blockTypes.CONCEPT] === 4 &&
+    typeCounts[blockTypes.EXAMPLE] === 2 &&
+    typeCounts[blockTypes.QUIZ] === 5
+  );
+}
+
+function validateRefinedSection(data, section) {
+  const allowedType = sectionTypes[section];
 
   if (
-    data.blocks.length !== 16 ||
-    flashcards.length !== 5 ||
-    concepts.length !== 4 ||
-    examples.length !== 2 ||
-    quizzes.length !== 5
+    !allowedType ||
+    !data ||
+    typeof data !== "object" ||
+    Array.isArray(data) ||
+    !Array.isArray(data.blocks) ||
+    data.blocks.length === 0
   ) {
     return false;
   }
 
-  const validFlashcards = flashcards.every(
-    (block) =>
-      typeof block.question === "string" &&
-      block.question.trim().length > 0 &&
-      typeof block.answer === "string" &&
-      block.answer.trim().length > 0,
+  return data.blocks.every(
+    (block) => block?.type === allowedType && validateBlock(block),
   );
+}
 
-  const validConcepts = concepts.every(
-    (block) =>
-      typeof block.term === "string" &&
-      block.term.trim().length > 0 &&
-      typeof block.definition === "string" &&
-      block.definition.trim().length > 0 &&
-      typeof block.keyPoint === "string" &&
-      block.keyPoint.trim().length > 0,
-  );
+async function generateAndValidate(prompt, validator) {
+  if (!process.env.GEMINI_API_KEY) {
+    const error = new Error(
+      "The AI service is not configured. Please try again later.",
+    );
+    error.status = 500;
+    throw error;
+  }
 
-  const validExamples = examples.every(
-    (block) =>
-      typeof block.title === "string" &&
-      block.title.trim().length > 0 &&
-      typeof block.content === "string" &&
-      block.content.trim().length > 0,
-  );
+  const result = await ai.models.generateContent({
+    model: "gemini-3.5-flash-lite",
+    contents: prompt,
+    config: {
+      responseMimeType: "application/json",
+    },
+  });
 
-  const validQuizzes = quizzes.every(
-    (block) =>
-      typeof block.question === "string" &&
-      block.question.trim().length > 0 &&
-      Array.isArray(block.options) &&
-      block.options.length === 4 &&
-      block.options.every(
-        (option) => typeof option === "string" && option.trim().length > 0,
-      ) &&
-      Number.isInteger(block.answer) &&
-      block.answer >= 0 &&
-      block.answer <= 3,
-  );
+  if (!result.text) {
+    const error = new Error(
+      "The AI returned an empty response. Please try again.",
+    );
+    error.status = 502;
+    throw error;
+  }
 
-  return validFlashcards && validConcepts && validExamples && validQuizzes;
+  let data;
+
+  try {
+    data = JSON.parse(result.text);
+  } catch {
+    const error = new Error(
+      "The AI returned an invalid response. Please try again.",
+    );
+    error.status = 502;
+    throw error;
+  }
+
+  if (!validator(data)) {
+    const error = new Error(
+      "The AI returned invalid study material. Please try again.",
+    );
+    error.status = 502;
+    throw error;
+  }
+
+  return data;
+}
+
+function handleGeminiError(error, res) {
+  console.error("Gemini error:", error);
+
+  if (error.status === 429) {
+    return res.status(429).json({
+      error: "AI request limit reached. Please wait before trying again.",
+    });
+  }
+
+  if (error.status === 400) {
+    return res.status(400).json({
+      error: "The AI could not process this request. Please try again.",
+    });
+  }
+
+  if (error.status === 403) {
+    return res.status(500).json({
+      error: "The AI service is not authorized. Please try again later.",
+    });
+  }
+
+  if (error.status === 502) {
+    return res.status(502).json({
+      error: error.message,
+    });
+  }
+
+  if (error.status === 500 && error.message) {
+    return res.status(500).json({
+      error: error.message,
+    });
+  }
+
+  return res.status(500).json({
+    error: "Unable to process study material. Please try again.",
+  });
 }
 
 app.post("/api/generate", async (req, res) => {
@@ -100,12 +237,6 @@ app.post("/api/generate", async (req, res) => {
     if (input.trim().length > 10000) {
       return res.status(400).json({
         error: "Please keep your study material under 10,000 characters.",
-      });
-    }
-
-    if (!process.env.GEMINI_API_KEY) {
-      return res.status(500).json({
-        error: "The AI service is not configured. Please try again later.",
       });
     }
 
@@ -167,62 +298,126 @@ User's study material:
 ${input.trim()}
 `;
 
-    const result = await ai.models.generateContent({
-      model: "gemini-3.5-flash-lite",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-      },
-    });
-
-    if (!result.text) {
-      return res.status(502).json({
-        error: "The AI returned an empty response. Please try again.",
-      });
-    }
-
-    let data;
-
-    try {
-      data = JSON.parse(result.text);
-    } catch {
-      return res.status(502).json({
-        error: "The AI returned an invalid response. Please try again.",
-      });
-    }
-
-    if (!validateStudyMaterial(data)) {
-      return res.status(502).json({
-        error: "The AI returned incomplete study material. Please try again.",
-      });
-    }
+    const data = await generateAndValidate(prompt, validateStudyMaterial);
 
     return res.json(data);
   } catch (error) {
-    console.error("Gemini error:", error);
+    return handleGeminiError(error, res);
+  }
+});
 
-    if (error.status === 429) {
-      return res.status(429).json({
-        error: "AI request limit reached. Please wait before trying again.",
-      });
-    }
+app.post("/api/refine", async (req, res) => {
+  try {
+    const { section, content, instruction } = req.body || {};
 
-    if (error.status === 400) {
+    if (!sectionTypes[section]) {
       return res.status(400).json({
-        error:
-          "The AI could not process this request. Please try another topic.",
+        error: "Please select a valid section to refine.",
       });
     }
 
-    if (error.status === 403) {
-      return res.status(500).json({
-        error: "The AI service is not authorized. Please try again later.",
+    if (!Array.isArray(content) || content.length === 0) {
+      return res.status(400).json({
+        error: "The selected section has no content to refine.",
       });
     }
 
-    return res.status(500).json({
-      error: "Unable to generate study material. Please try again.",
-    });
+    if (
+      !content.every(
+        (block) =>
+          block?.type === sectionTypes[section] && validateBlock(block),
+      )
+    ) {
+      return res.status(400).json({
+        error: "The existing section content is invalid.",
+      });
+    }
+
+    if (typeof instruction !== "string" || !instruction.trim()) {
+      return res.status(400).json({
+        error: "Please enter a refinement instruction.",
+      });
+    }
+
+    if (instruction.trim().length > 2000) {
+      return res.status(400).json({
+        error: "Please keep your instruction under 2,000 characters.",
+      });
+    }
+
+    const schemas = {
+      flashcards: {
+        type: "flashcard",
+        question: "Short question",
+        answer: "Short answer",
+      },
+      notes: {
+        type: "concept",
+        term: "Concept name",
+        definition: "Short explanation",
+        keyPoint: "Important takeaway",
+      },
+      examples: {
+        type: "example",
+        title: "Example title",
+        content: "Short example and explanation",
+      },
+      quiz: {
+        type: "quiz",
+        question: "Question",
+        options: ["Option A", "Option B", "Option C", "Option D"],
+        answer: 0,
+      },
+    };
+
+    const sectionNames = {
+      flashcards: "flashcards",
+      notes: "concepts",
+      examples: "examples",
+      quiz: "quiz questions",
+    };
+
+    const prompt = `
+You are a study material refinement assistant.
+
+The user wants to refine ONLY the ${sectionNames[section]} section.
+
+Refine the provided content according to the user's instruction.
+
+Return ONLY valid JSON using this exact structure:
+{
+  "blocks": [
+    ${JSON.stringify(schemas[section])}
+  ]
+}
+
+Requirements:
+- Return only the ${sectionNames[section]} section.
+- Every returned block must have the type "${sectionTypes[section]}".
+- Follow the user's refinement instruction.
+- Preserve the original topic and learning objectives.
+- Preserve useful information unless the instruction asks to change it.
+- Return the same number of blocks as the original content unless the instruction explicitly asks to add or remove items.
+- Keep language clear, concise, and easy to understand.
+- Do not invent facts that are not supported by the existing content.
+- For quizzes, provide exactly 4 options and use the zero-based index of the correct answer.
+- Do not include title, summary, or other section types.
+- Return no Markdown fences or text outside the JSON.
+
+Existing section content:
+${JSON.stringify(content)}
+
+User's refinement instruction:
+${instruction.trim()}
+`;
+
+    const data = await generateAndValidate(prompt, (data) =>
+      validateRefinedSection(data, section),
+    );
+
+    return res.json(data);
+  } catch (error) {
+    return handleGeminiError(error, res);
   }
 });
 

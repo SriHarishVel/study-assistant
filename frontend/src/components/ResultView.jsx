@@ -21,23 +21,22 @@ function ResultView({ response, activeTab }) {
 
   return (
     <div className="result-view">
-      <h2>{response.title}</h2>
 
       {activeTab === "flashcards" && (
-        <section className="study-material">
+        <section className="panel study-material">
           <h3>Flashcards</h3>
 
           {flashcards.length > 0 ? (
             <FlashcardDeck key={response.title} blocks={flashcards} />
           ) : (
-            <p>No flashcards available.</p>
+            <p className="muted">No flashcards available.</p>
           )}
         </section>
       )}
 
       {activeTab === "notes" && (
         <>
-          <section className="summary-section">
+          <section className="panel summary-section">
             <h3>Summary</h3>
 
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -45,7 +44,7 @@ function ResultView({ response, activeTab }) {
             </ReactMarkdown>
           </section>
 
-          <section className="study-material">
+          <section className="panel study-material">
             <h3>Concepts</h3>
 
             {concepts.length > 0 ? (
@@ -69,14 +68,14 @@ function ResultView({ response, activeTab }) {
                 </div>
               ))
             ) : (
-              <p>No concepts available.</p>
+              <p className="muted">No concepts available.</p>
             )}
           </section>
         </>
       )}
 
       {activeTab === "examples" && (
-        <section className="study-material">
+        <section className="panel study-material">
           <h3>Examples</h3>
 
           {examples.length > 0 ? (
@@ -90,7 +89,7 @@ function ResultView({ response, activeTab }) {
               </div>
             ))
           ) : (
-            <p>No examples available.</p>
+            <p className="muted">No examples available.</p>
           )}
         </section>
       )}

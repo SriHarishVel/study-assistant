@@ -1,17 +1,28 @@
-function SavedSessions({ sessions, onLoad, onDelete }) {
+function SavedSessions({ sessions, onLoad, onDelete, onSave }) {
   return (
-    <section className="saved-sessions">
-      <h3>Saved Sessions</h3>
+    <section className="panel saved-sessions">
+      <div className="saved-sessions-header">
+        <h3>Saved Sessions</h3>
+
+        <button
+          type="button"
+          className="primary save-session-button"
+          onClick={onSave}
+          disabled={!onSave}
+        >
+          + Save Session
+        </button>
+      </div>
 
       {sessions.length === 0 ? (
-        <p className="saved-empty">No saved sessions yet.</p>
+        <p className="muted">No saved sessions yet.</p>
       ) : (
         <div className="saved-session-list">
           {sessions.map((session) => (
             <div className="saved-session-card" key={session.id}>
               <button
                 type="button"
-                className="saved-session-title"
+                className="secondary saved-session-title"
                 onClick={() => onLoad(session)}
               >
                 {session.title}
@@ -19,9 +30,8 @@ function SavedSessions({ sessions, onLoad, onDelete }) {
 
               <button
                 type="button"
-                className="saved-session-delete"
+                className="danger saved-session-delete"
                 onClick={() => onDelete(session.id)}
-                aria-label={`Delete ${session.title}`}
               >
                 Delete
               </button>
