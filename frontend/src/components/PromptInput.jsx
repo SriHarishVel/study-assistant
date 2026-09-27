@@ -17,6 +17,7 @@ function PromptInput({ input, setInput, onSubmit }) {
           type="text"
           className="input"
           value={input}
+          maxLength={10000}
           onChange={(event) => setInput(event.target.value)}
           placeholder="Enter a topic to start learning..."
         />

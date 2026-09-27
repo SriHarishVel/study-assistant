@@ -179,9 +179,16 @@ function validateRefinedSection(data, section) {
     !data ||
     typeof data !== "object" ||
     Array.isArray(data) ||
-    !Array.isArray(data.blocks) ||
-    data.blocks.length === 0
+    !Array.isArray(data.blocks)
   ) {
+    return false;
+  }
+
+  if (section === "chart") {
+    if (data.blocks.length > 2) {
+      return false;
+    }
+  } else if (data.blocks.length === 0) {
     return false;
   }
 
@@ -238,44 +245,102 @@ async function generateAndValidate(prompt, validator) {
   return data;
 }
 
+async function streamAndValidate(prompt, validator, res) {
+  if (!process.env.GEMINI_API_KEY) {
+    const error = new Error(
+      "The AI service is not configured. Please try again later.",
+    );
+    error.status = 500;
+    throw error;
+  }
+
+  const stream = await ai.models.generateContentStream({
+    model: "gemini-3.5-flash-lite",
+    contents: prompt,
+    config: {
+      responseMimeType: "application/json",
+    },
+  });
+
+  let text = "";
+
+  for await (const chunk of stream) {
+    if (res.destroyed) {
+      return null;
+    }
+
+    if (chunk.text) {
+      text += chunk.text;
+
+      res.write(`event: chunk\ndata: ${JSON.stringify(chunk.text)}\n\n`);
+    }
+  }
+
+  if (!text.trim()) {
+    const error = new Error(
+      "The AI returned an empty response. Please try again.",
+    );
+    error.status = 502;
+    throw error;
+  }
+
+  let data;
+
+  try {
+    data = JSON.parse(text);
+  } catch {
+    const error = new Error(
+      "The AI returned an invalid response. Please try again.",
+    );
+    error.status = 502;
+    throw error;
+  }
+
+  if (!validator(data)) {
+    const error = new Error(
+      "The AI returned invalid study material. Please try again.",
+    );
+    error.status = 502;
+    throw error;
+  }
+
+  return data;
+}
+
 function handleGeminiError(error, res) {
   console.error("Gemini error:", error);
 
+  let status = 500;
+  let message = "Unable to process study material. Please try again.";
+
   if (error.status === 429) {
-    return res.status(429).json({
-      error: "AI request limit reached. Please wait before trying again.",
-    });
+    status = 429;
+    message = "AI request limit reached. Please wait before trying again.";
+  } else if (error.status === 400) {
+    status = 400;
+    message = "The AI could not process this request. Please try again.";
+  } else if (error.status === 403) {
+    message = "The AI service is not authorized. Please try again later.";
+  } else if (error.status === 502) {
+    status = 502;
+    message = error.message;
+  } else if (error.status === 500 && error.message) {
+    message = error.message;
   }
 
-  if (error.status === 400) {
-    return res.status(400).json({
-      error: "The AI could not process this request. Please try again.",
-    });
+  if (res.headersSent) {
+    if (!res.destroyed && !res.writableEnded) {
+      res.write(
+        `event: error\ndata: ${JSON.stringify({ error: message })}\n\n`,
+      );
+      res.end();
+    }
+
+    return;
   }
 
-  if (error.status === 403) {
-    return res.status(500).json({
-      error: "The AI service is not authorized. Please try again later.",
-    });
-  }
-
-  if (error.status === 502) {
-    return res.status(502).json({
-      error: error.message,
-    });
-  }
-
-  if (error.status === 500 && error.message) {
-    return res.status(500).json({
-      error: error.message,
-    });
-  }
-
-  return res.status(500).json({
-    error: "Unable to process study material. Please try again.",
-  });
+  return res.status(status).json({ error: message });
 }
-
 app.post("/api/generate", async (req, res) => {
   try {
     const { input } = req.body || {};
@@ -527,17 +592,33 @@ GENERAL CONTENT:
 - Include short code snippets only when relevant.
 - Do not invent facts that are not supported
   by the provided material.
-- Include all four block types:
-  flashcard, concept, chart, and quiz.
+- Include flashcard, concept, and quiz blocks.
+- Include chart blocks only when meaningful visualizations
+  are supported by the study material.
 - Return no Markdown fences or text outside JSON.
 
 User's study material:
 ${input.trim()}
 `;
 
-    const data = await generateAndValidate(prompt, validateStudyMaterial);
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders();
 
-    return res.json(data);
+    try {
+      const data = await streamAndValidate(prompt, validateStudyMaterial, res);
+
+      if (data === null || res.destroyed) {
+        return;
+      }
+
+      res.write(`event: complete\ndata: ${JSON.stringify(data)}\n\n`);
+
+      res.end();
+    } catch (error) {
+      handleGeminiError(error, res);
+    }
   } catch (error) {
     return handleGeminiError(error, res);
   }
@@ -553,7 +634,7 @@ app.post("/api/refine", async (req, res) => {
       });
     }
 
-    if (!Array.isArray(content) || content.length === 0) {
+    if ( !Array.isArray(content) || (content.length === 0 && section !== "chart") ) {
       return res.status(400).json({
         error: "The selected section has no content to refine.",
       });
@@ -817,6 +898,8 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.listen(5000, () => {
-  console.log("Backend running on http://localhost:5000");
+const PORT = process.env.PORT || 5000;
+
+app.listen(PORT, () => {
+  console.log(`Backend running on http://localhost:${PORT}`);
 });

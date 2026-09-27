@@ -84,6 +84,7 @@ function App() {
   const [sessions, setSessions] = useState(getSavedSessions);
 
   const requestId = useRef(0);
+  const abortController = useRef(null);
 
   useEffect(() => {
     document.documentElement.setAttribute(
@@ -100,8 +101,20 @@ function App() {
     }
   }, [sessions]);
 
+  useEffect(() => {
+    return () => {
+      requestId.current += 1;
+      abortController.current?.abort();
+    };
+  }, []);
+
   async function handleSubmit() {
     if (!input.trim() || loading || refining) return;
+
+    abortController.current?.abort();
+
+    const controller = new AbortController();
+    abortController.current = controller;
 
     const id = ++requestId.current;
 
@@ -113,7 +126,7 @@ function App() {
     setActiveTab("flashcards");
 
     try {
-      const data = await generateStudyMaterial(input.trim());
+      const data = await generateStudyMaterial(input.trim(), controller.signal);
 
       if (id !== requestId.current) return;
 
@@ -121,10 +134,13 @@ function App() {
     } catch (err) {
       if (id !== requestId.current) return;
 
+      if (err.name === "AbortError") return;
+
       setError(err.message || "Something went wrong. Please try again.");
     } finally {
       if (id === requestId.current) {
         setLoading(false);
+        abortController.current = null;
       }
     }
   }
@@ -132,13 +148,19 @@ function App() {
   async function handleRefine(instruction) {
     if (!response || !instruction.trim() || refining || loading) return;
 
+    abortController.current?.abort();
+
+    const controller = new AbortController();
+    abortController.current = controller;
+
     const id = ++requestId.current;
     const selectedTab = activeTab;
 
     const sectionContent = getSectionContent(response, selectedTab);
 
-    if (sectionContent.length === 0) {
+    if (sectionContent.length === 0 && selectedTab !== "chart") {
       setRefinementError("No content found in this section to refine.");
+      abortController.current = null;
       return;
     }
 
@@ -151,6 +173,7 @@ function App() {
         sectionContent,
         instruction.trim(),
         selectedTab,
+        controller.signal,
       );
 
       if (id !== requestId.current) return;
@@ -167,7 +190,10 @@ function App() {
         allowedTypes.includes(block.type),
       );
 
-      if (refinedSection.blocks.length === 0 || !validBlocks) {
+      if (
+        (refinedSection.blocks.length === 0 && selectedTab !== "chart") ||
+        !validBlocks
+      ) {
         throw new Error("The AI returned invalid content for this tab.");
       }
 
@@ -181,18 +207,21 @@ function App() {
     } catch (err) {
       if (id !== requestId.current) return;
 
+      if (err.name === "AbortError") return;
+
       setRefinementError(
         err.message || "Unable to refine this section. Please try again.",
       );
     } finally {
       if (id === requestId.current) {
         setRefining(false);
+        abortController.current = null;
       }
     }
   }
 
   function handleSaveSession() {
-    if (!response || loading) return;
+    if (!response || loading || refining) return;
 
     const session = {
       id: crypto.randomUUID(),
@@ -206,6 +235,9 @@ function App() {
 
   function handleLoadSession(session) {
     requestId.current += 1;
+
+    abortController.current?.abort();
+    abortController.current = null;
 
     setLoading(false);
     setRefining(false);
@@ -245,7 +277,7 @@ function App() {
         onLoad={handleLoadSession}
         onDelete={handleDeleteSession}
         onSave={handleSaveSession}
-        canSave={Boolean(response && !loading)}
+        canSave={Boolean(response && !loading && !refining)}
       />
 
       {response && (
