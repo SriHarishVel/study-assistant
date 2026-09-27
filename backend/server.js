@@ -7,7 +7,7 @@ const { GoogleGenAI } = require("@google/genai");
 const app = express();
 
 const corsOptions = {
-  origin: "https://study-assistant-gamma-two.vercel.app",
+  origin: true,
   methods: ["GET", "POST", "OPTIONS"],
   allowedHeaders: ["Content-Type"],
 };
