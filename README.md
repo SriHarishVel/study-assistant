@@ -126,6 +126,6 @@ Loading, error, and empty states are provided to keep the application usable whe
 - **Chart Rendering:** Flowchart node alignment and spacing may occasionally be inconsistent due to the third-party rendering library.
 - **Chart Availability:** Charts are generated only when meaningful data is available. Some topics may not produce a chart.
 - **Generation Time:** AI responses may take time depending on the Gemini API, network conditions, and usage limits.
-- **API Free-Tier Limits:** The Gemini API free tier has usage limits, such as 5 requests per minute (RPM) and 20 requests per day (RPD), depending on the model and account. Exceeding these limits may temporarily prevent AI requests.
+- **API Free-Tier Limits:** The Gemini 3.5 Flash Lite free tier has a limit of 15 requests per minute (RPM) and 500 requests per day (RPD). Exceeding these limits may temporarily prevent AI requests.
 - **API Dependency:** AI-powered features require an internet connection, a running backend, and an available Gemini API.
 - **Session Storage:** Saved sessions are managed within the application and do not currently provide cross-device synchronization.
