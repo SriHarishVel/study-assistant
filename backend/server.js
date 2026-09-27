@@ -6,6 +6,13 @@ const { GoogleGenAI } = require("@google/genai");
 
 const app = express();
 
+app.get("/health", (req, res) => {
+  res.json({
+    status: "OK",
+    message: "Flam backend is running",
+  });
+});
+
 const corsOptions = {
   origin: true,
   methods: ["GET", "POST", "OPTIONS"],
@@ -14,6 +21,11 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.options(/.*/, cors(corsOptions));
+
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.originalUrl}`);
+  next();
+});
 
 app.use(express.json({ limit: "100kb" }));
 
