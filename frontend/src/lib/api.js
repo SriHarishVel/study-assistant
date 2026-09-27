@@ -1,6 +1,6 @@
 import { validateResult, validateRefinedSection } from "./validateResult";
 
-const API_URL = "http://localhost:5000/api";
+const API_URL = "https://study-assistant-xdc.onrender.com/api";
 
 async function postStudyMaterial(
   endpoint,
