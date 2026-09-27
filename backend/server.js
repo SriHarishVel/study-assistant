@@ -6,18 +6,15 @@ const { GoogleGenAI } = require("@google/genai");
 
 const app = express();
 
-app.use((req, res, next) => {
-  console.log(req.method, req.path, req.headers.origin);
-  next();
-});
+const corsOptions = {
+  origin: "https://study-assistant-gamma-two.vercel.app",
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type"],
+};
 
-app.use(
-  cors({
-    origin: "https://study-assistant-gamma-two.vercel.app",
-    methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type"],
-  })
-);
+app.use(cors(corsOptions));
+app.options(/.*/, cors(corsOptions));
+
 app.use(express.json({ limit: "100kb" }));
 
 const ai = new GoogleGenAI({
