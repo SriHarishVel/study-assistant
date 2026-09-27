@@ -6,7 +6,13 @@ const { GoogleGenAI } = require("@google/genai");
 
 const app = express();
 
-app.use(cors());
+app.use(
+  cors({
+    origin: "https://study-assistant-gamma-two.vercel.app",
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type"],
+  })
+);
 app.use(express.json({ limit: "100kb" }));
 
 const ai = new GoogleGenAI({
