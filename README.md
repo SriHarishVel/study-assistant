@@ -104,7 +104,7 @@ Make sure the backend is running before using the AI features.
 
 Google Gemini is used to generate structured study material and refine existing content.
 
-ChatGPT was used during development for UI styling, implementing the streaming feature, overall debugging, and creating the AI-generated logo used in the application title.
+ChatGPT was used during development for UI styling, implementing the streaming feature, overall debugging, creating the AI-generated logo used in the application title, and drafting the prompt used to generate study materials.
 
 ## Error Handling
 
